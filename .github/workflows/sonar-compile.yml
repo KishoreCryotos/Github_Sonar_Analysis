@@ -44,3 +44,8 @@ jobs:
           -Dsonar.github.repository=${{ github.repository }} \
           -Dsonar.github.pullRequest=${{ github.event.pull_request.number || '' }} \
           -Dsonar.github.token=${{ secrets.GITHUB_TOKEN }}
+
+    - name: Print SonarQube Link
+      run: |
+        echo "SonarQube analysis link for this branch:"
+        echo "${{ env.SONAR_HOST_URL }}/dashboard?id=my-java-project&branch=${GITHUB_REF##*/}"
