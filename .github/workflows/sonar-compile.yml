@@ -47,7 +47,7 @@ jobs:
 
     - name: Print SonarQube Link
       env:
-       SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+       SONAR_HOST_URL: http://15.206.80.33:9000/
       run: |
         echo "SonarQube analysis link for this branch:"
         echo "${{ env.SONAR_HOST_URL }}/dashboard?id=my-java-project&branch=${GITHUB_REF##*/}"
