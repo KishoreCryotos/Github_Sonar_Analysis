@@ -7,7 +7,7 @@ import java.io.PrintStream;
  */
 
 
-public class Hello {
+public class Hello1 {
 
     static final String HELLO = "Hello!";
 
