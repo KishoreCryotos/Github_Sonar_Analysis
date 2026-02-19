@@ -1,38 +1,39 @@
-name: SonarQube Analysis on Push
+name: SonarQube Analysis
 
 on:
   push:
     branches:
       - main
-      - 'feature/*'
+      - feature/**
+  pull_request:
+    branches:
+      - main
 
 jobs:
   sonar:
-    name: Run SonarQube Scan
+    name: Build and Sonar Scan
     runs-on: ubuntu-latest
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v3
 
-    - name: Set up Java
+    - name: Setup Java
       uses: actions/setup-java@v3
       with:
-        distribution: 'temurin'
-        java-version: '17'
+        distribution: temurin
+        java-version: 17
 
-    - name: Cache Maven packages
+    - name: Cache Maven
       uses: actions/cache@v3
       with:
         path: ~/.m2/repository
         key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
-        restore-keys: |
-          ${{ runner.os }}-maven-
 
-    - name: Compile Project
-      run: mvn clean compile
+    - name: Build Project
+      run: mvn clean verify
 
-    - name: Run SonarQube Analysis
+    - name: SonarQube Scan
       env:
         SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
         SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
@@ -40,14 +41,14 @@ jobs:
         mvn sonar:sonar \
           -Dsonar.projectKey=my-java-project \
           -Dsonar.host.url=$SONAR_HOST_URL \
-          -Dsonar.login=$SONAR_TOKEN \
-          -Dsonar.github.repository=${{ github.repository }} \
-          -Dsonar.github.pullRequest=${{ github.event.pull_request.number || '' }} \
-          -Dsonar.github.token=${{ secrets.GITHUB_TOKEN }}
+          -Dsonar.login=$SONAR_TOKEN
 
-    - name: Print SonarQube Link
+    - name: Wait for Quality Gate
       env:
-       SONAR_HOST_URL: http://15.206.80.33:9000/
+        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
       run: |
-        echo "SonarQube analysis link for this branch:"
-        echo "${{ env.SONAR_HOST_URL }}/dashboard?id=my-java-project&branch=${GITHUB_REF##*/}"
+        mvn sonar:sonar \
+          -Dsonar.projectKey=my-java-project \
+          -Dsonar.host.url=$SONAR_HOST_URL \
+          -Dsonar.login=$SONAR_TOKEN \
+          -Dsonar.qualitygate.wait=true
