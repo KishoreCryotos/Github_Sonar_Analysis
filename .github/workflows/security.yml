@@ -1,0 +1,159 @@
+name: Security Scan
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+
+  gitleaks:
+    name: Gitleaks Secret Scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Run Gitleaks (generate report only)
+        run: |
+          docker run --rm -v $(pwd):/repo zricethezav/gitleaks detect \
+            --source=/repo \
+            --report-format sarif \
+            --report-path /repo/gitleaks-results.sarif \
+            --exit-code 0
+
+      - name: Install jq
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq
+
+      - name: Convert Gitleaks Findings to HTML
+        run: |
+          echo "<html><body><h1>Gitleaks Findings</h1><pre>" > gitleaks-report.html
+          jq '.runs[].results // []' gitleaks-results.sarif >> gitleaks-report.html
+          echo "</pre></body></html>" >> gitleaks-report.html
+
+      - name: Upload Gitleaks Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: gitleaks-report
+          path: gitleaks-report.html
+
+
+  semgrep:
+    name: Semgrep Code Security Scan
+    runs-on: ubuntu-latest
+    needs: gitleaks
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Run Semgrep (generate report only)
+        run: |
+          docker run --rm -v $(pwd):/repo returntocorp/semgrep semgrep scan \
+            --config p/owasp-top-ten \
+            --sarif \
+            --output /repo/semgrep.sarif \
+            /repo || true
+
+      - name: Install jq
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq
+
+      - name: Convert Semgrep Findings to HTML
+        run: |
+          echo "<html><body><h1>Semgrep Findings</h1><pre>" > semgrep-report.html
+          jq '.runs[].results // []' semgrep.sarif >> semgrep-report.html
+          echo "</pre></body></html>" >> semgrep-report.html
+
+      - name: Upload Semgrep Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: semgrep-report
+          path: semgrep-report.html
+
+
+  security-gate:
+    name: Security Gate (Block if issues found)
+    runs-on: ubuntu-latest
+    needs:
+      - gitleaks
+      - semgrep
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Run Gitleaks Again for Gate Check
+        run: |
+          docker run --rm -v $(pwd):/repo zricethezav/gitleaks detect \
+            --source=/repo \
+            --report-format sarif \
+            --report-path /repo/gitleaks-results.sarif \
+            --exit-code 0
+
+      - name: Run Semgrep Again for Gate Check
+        run: |
+          docker run --rm -v $(pwd):/repo returntocorp/semgrep semgrep scan \
+            --config p/owasp-top-ten \
+            --sarif \
+            --output /repo/semgrep.sarif \
+            /repo || true
+
+      - name: Count Findings and Fail if Present
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq
+
+          GITLEAKS_COUNT=$(jq '[.runs[].results // [] | .[]] | length' gitleaks-results.sarif)
+          SEMGREP_COUNT=$(jq '[.runs[].results // [] | .[]] | length' semgrep.sarif)
+
+          echo "GITLEAKS_COUNT=$GITLEAKS_COUNT" >> $GITHUB_ENV
+          echo "SEMGREP_COUNT=$SEMGREP_COUNT" >> $GITHUB_ENV
+
+          echo "Gitleaks Findings: $GITLEAKS_COUNT"
+          echo "Semgrep Findings: $SEMGREP_COUNT"
+
+          if [ "$GITLEAKS_COUNT" -gt 0 ] || [ "$SEMGREP_COUNT" -gt 0 ]; then
+            exit 1
+          fi
+
+      - name: Create GitHub Issue on Failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: "🚨 Security Gate Failed - " + context.sha.substring(0,7),
+              body:
+                "🚨 Security Gate Failed\n\n" +
+                "🔹 Branch: " + context.ref.replace('refs/heads/','') + "\n" +
+                "🔹 Commit: " + context.sha + "\n" +
+                "🔹 Author: " + context.actor + "\n\n" +
+                "## Findings Summary\n\n" +
+                "* Gitleaks: " + process.env.GITLEAKS_COUNT + " findings detected\n" +
+                "* Semgrep: " + process.env.SEMGREP_COUNT + " findings detected\n\n" +
+                "## Action Required\n\n" +
+                "1. Download workflow artifacts:\n" +
+                "   - gitleaks-report\n" +
+                "   - semgrep-report\n\n" +
+                "2. Review findings\n" +
+                "3. Fix issues\n" +
+                "4. Push updated code / Raise PR\n\n" +
+                "Merge blocked until all findings are cleared."
+            })
+
+      - name: Success Message
+        if: success()
+        run: echo "Security gate passed...!!!"
