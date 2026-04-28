@@ -12,6 +12,8 @@ public class TestVuln {
     String apiKey = "sk_test_ABC123SECRETXYZ";
     String dbPassword = "root@123";
 
+     String awsKey3 = "AKIA987654321TESKEYS";
+
     // New secret for extra Gitleaks finding
     String awsKey2 = "AKIA999999999NEWTEST";
 
