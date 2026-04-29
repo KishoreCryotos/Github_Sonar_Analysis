@@ -12,7 +12,7 @@ public class TestVuln {
     String apiKey = "sk_test_ABC123SECRETXYZ";
     String dbPassword = "root@123";
 
-     String awsKey3 = "AKIA987654321TESKEYS";
+    String awsKey3 = "AKIA987654321TESKEYS";
 
     // New secret for extra Gitleaks finding
     String awsKey2 = "AKIA999999999NEWTEST";
@@ -23,7 +23,7 @@ public class TestVuln {
 
         Runtime.getRuntime().exec("cmd /c " + input);
 
-        // New Semgrep finding
+        // Existing finding
         Runtime.getRuntime().exec("powershell " + input);
 
         Statement stmt = conn.createStatement();
@@ -34,5 +34,11 @@ public class TestVuln {
 
         String query = "UPDATE users SET role='admin' WHERE id=" + input;
         stmt.executeQuery(query);
+
+        // Extra Finding 1
+        Runtime.getRuntime().exec("/bin/sh -c " + input);
+
+        // Extra Finding 2
+        stmt.executeQuery("INSERT INTO users(name) VALUES('" + input + "')");
     }
 }
