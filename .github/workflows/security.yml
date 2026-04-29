@@ -23,7 +23,7 @@ jobs:
 
       - name: Run Gitleaks (generate report only)
         run: |
-          docker run --rm -v $(pwd):/repo zricethezav/gitleaks detect \
+          docker run --rm -v $(pwd):/repo -w /repo zricethezav/gitleaks detect \
             --source=/repo \
             --log-opts="HEAD~1..HEAD" \
             --report-format sarif \
@@ -66,7 +66,7 @@ jobs:
           if [ -z "$CHANGED_FILES" ]; then
             echo '{"runs":[{"results":[]}]}' > semgrep.sarif
           else
-            docker run --rm -v $(pwd):/repo returntocorp/semgrep semgrep scan \
+            docker run --rm -v $(pwd):/repo -w /repo returntocorp/semgrep semgrep scan \
               --config p/owasp-top-ten \
               --sarif \
               --output /repo/semgrep.sarif \
@@ -106,7 +106,7 @@ jobs:
 
       - name: Run Gitleaks Again for Gate Check
         run: |
-          docker run --rm -v $(pwd):/repo zricethezav/gitleaks detect \
+          docker run --rm -v $(pwd):/repo -w /repo zricethezav/gitleaks detect \
             --source=/repo \
             --log-opts="HEAD~1..HEAD" \
             --report-format sarif \
@@ -120,7 +120,7 @@ jobs:
           if [ -z "$CHANGED_FILES" ]; then
             echo '{"runs":[{"results":[]}]}' > semgrep.sarif
           else
-            docker run --rm -v $(pwd):/repo returntocorp/semgrep semgrep scan \
+            docker run --rm -v $(pwd):/repo -w /repo returntocorp/semgrep semgrep scan \
               --config p/owasp-top-ten \
               --sarif \
               --output /repo/semgrep.sarif \
