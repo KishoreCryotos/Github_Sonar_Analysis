@@ -6,7 +6,7 @@ import java.sql.Statement;
 public class TestVuln {
 
     // One Gitleaks finding only
-    String awsKey = "AKIA123456789TESTKEY";
+    String awsKey = "AKIA2026NEWTESTKEY12";
 
     public void run(String input, Connection conn) throws Exception {
 
