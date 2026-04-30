@@ -61,19 +61,24 @@ jobs:
 
       - name: Run Semgrep (generate report only)
         run: |
-          CHANGED_FILES=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }} | grep -E '\.(java|js|ts|py|go|php)$' || true)
+          CHANGED_FILES=$(git diff --name-only HEAD^ HEAD | grep -E '\.(java|js|ts|py|go|php)$' || true)
+
+          echo "Changed files: $CHANGED_FILES"
 
           if [ -z "$CHANGED_FILES" ]; then
-            echo '{"runs":[{"results":[]}]}' > semgrep.sarif
+            echo "No changed files detected, scanning full repo"
+            TARGET="."
           else
-            docker run --rm -v $(pwd):/repo -w /repo semgrep/semgrep semgrep scan \
-              --config p/owasp-top-ten \
-              --config p/java \
-              --config p/security-audit \
-              --sarif \
-              --output /repo/semgrep.sarif \
-              $CHANGED_FILES || true
+            TARGET="$CHANGED_FILES"
           fi
+
+          docker run --rm -v $(pwd):/repo -w /repo semgrep/semgrep semgrep scan \
+            --config p/owasp-top-ten \
+            --config p/java \
+            --config p/security-audit \
+            --sarif \
+            --output /repo/semgrep.sarif \
+            $TARGET || true
 
       - name: Install jq
         run: |
@@ -117,19 +122,24 @@ jobs:
 
       - name: Run Semgrep Again for Gate Check
         run: |
-          CHANGED_FILES=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }} | grep -E '\.(java|js|ts|py|go|php)$' || true)
+          CHANGED_FILES=$(git diff --name-only HEAD^ HEAD | grep -E '\.(java|js|ts|py|go|php)$' || true)
+
+          echo "Changed files: $CHANGED_FILES"
 
           if [ -z "$CHANGED_FILES" ]; then
-            echo '{"runs":[{"results":[]}]}' > semgrep.sarif
+            echo "No changed files detected, scanning full repo"
+            TARGET="."
           else
-            docker run --rm -v $(pwd):/repo -w /repo semgrep/semgrep semgrep scan \
-              --config p/owasp-top-ten \
-              --config p/java \
-              --config p/security-audit \
-              --sarif \
-              --output /repo/semgrep.sarif \
-              $CHANGED_FILES || true
+            TARGET="$CHANGED_FILES"
           fi
+
+          docker run --rm -v $(pwd):/repo -w /repo semgrep/semgrep semgrep scan \
+            --config p/owasp-top-ten \
+            --config p/java \
+            --config p/security-audit \
+            --sarif \
+            --output /repo/semgrep.sarif \
+            $TARGET || true
 
       - name: Count Findings and Fail if Present
         run: |
