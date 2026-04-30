@@ -8,4 +8,3 @@ public void run(String input, Connection conn) throws Exception {
     // Finding 2 (Command Injection - detectable)
     Runtime.getRuntime().exec("sh -c " + input);
 }
-
