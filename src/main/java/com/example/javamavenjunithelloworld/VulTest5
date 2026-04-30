@@ -6,6 +6,5 @@ public void run(String input, Connection conn) throws Exception {
     stmt.executeQuery("SELECT * FROM users WHERE id=" + input);
 
     // Finding 2 (Command Injection - detectable)
-    String cmd = "sh -c " + input;
-    Runtime.getRuntime().exec(cmd);
+    Runtime.getRuntime().exec("sh -c " + input);
 }
