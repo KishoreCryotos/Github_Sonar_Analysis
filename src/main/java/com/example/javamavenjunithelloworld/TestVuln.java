@@ -19,5 +19,8 @@ public class TestVuln {
 
         // Semgrep Finding 2 (Command Injection)
         Runtime.getRuntime().exec(input);
+
+         // ✅ NEW Semgrep Finding 3 (SQL Injection - INSERT)
+        stmt.executeQuery("INSERT INTO users(name) VALUES('" + input + "')");
     }
 }
