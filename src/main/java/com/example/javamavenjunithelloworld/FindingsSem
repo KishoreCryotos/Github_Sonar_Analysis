@@ -1,0 +1,21 @@
+package com.example.javamavenjunithelloworld;
+
+import java.sql.Connection;
+import java.sql.Statement;
+
+public class TestVuln {
+
+    public void run(String input, Connection conn) throws Exception {
+
+        // 🔴 Finding 1 — Command Injection (HIGH confidence)
+        Runtime.getRuntime().exec(input);
+
+        // 🔴 Finding 2 — Command Injection (variant)
+        Runtime.getRuntime().exec("sh -c " + input);
+
+        // 🔴 Finding 3 — SQL Injection (strong pattern)
+        Statement stmt = conn.createStatement();
+        String query = "SELECT * FROM users WHERE id=" + input;
+        stmt.executeQuery(query);
+    }
+}
