@@ -66,8 +66,9 @@ jobs:
           if [ -z "$CHANGED_FILES" ]; then
             echo '{"runs":[{"results":[]}]}' > semgrep.sarif
           else
-            docker run --rm -v $(pwd):/repo -w /repo returntocorp/semgrep semgrep scan \
-              --config p/owasp-top-ten \
+            docker run --rm -v $(pwd):/repo -w /repo semgrep/semgrep semgrep scan \
+              --config p/java \
+              --config p/security-audit \
               --sarif \
               --output /repo/semgrep.sarif \
               $CHANGED_FILES || true
@@ -120,8 +121,9 @@ jobs:
           if [ -z "$CHANGED_FILES" ]; then
             echo '{"runs":[{"results":[]}]}' > semgrep.sarif
           else
-            docker run --rm -v $(pwd):/repo -w /repo returntocorp/semgrep semgrep scan \
-              --config p/owasp-top-ten \
+            docker run --rm -v $(pwd):/repo -w /repo semgrep/semgrep semgrep scan \
+              --config p/java \
+              --config p/security-audit \
               --sarif \
               --output /repo/semgrep.sarif \
               $CHANGED_FILES || true
