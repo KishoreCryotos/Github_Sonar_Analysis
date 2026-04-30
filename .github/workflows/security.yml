@@ -61,19 +61,16 @@ jobs:
 
       - name: Run Semgrep (generate report only)
         run: |
-          CHANGED=$(git diff --name-only HEAD~1..HEAD | tr '\n' ' ')
+          CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD | grep -E '\.(java|js|ts|py|go|php)$' || true)
 
-          if [ -z "$CHANGED" ]; then
+          if [ -z "$CHANGED_FILES" ]; then
             echo '{"runs":[{"results":[]}]}' > semgrep.sarif
           else
             docker run --rm -v $(pwd):/repo -w /repo returntocorp/semgrep semgrep scan \
               --config p/owasp-top-ten \
               --sarif \
-              --output /repo/semgrep.sarif $CHANGED || true
-
-            if [ ! -f semgrep.sarif ]; then
-              echo '{"runs":[{"results":[]}]}' > semgrep.sarif
-            fi
+              --output /repo/semgrep.sarif \
+              $CHANGED_FILES || true
           fi
 
       - name: Install jq
@@ -118,19 +115,16 @@ jobs:
 
       - name: Run Semgrep Again for Gate Check
         run: |
-          CHANGED=$(git diff --name-only HEAD~1..HEAD | tr '\n' ' ')
+          CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD | grep -E '\.(java|js|ts|py|go|php)$' || true)
 
-          if [ -z "$CHANGED" ]; then
+          if [ -z "$CHANGED_FILES" ]; then
             echo '{"runs":[{"results":[]}]}' > semgrep.sarif
           else
             docker run --rm -v $(pwd):/repo -w /repo returntocorp/semgrep semgrep scan \
               --config p/owasp-top-ten \
               --sarif \
-              --output /repo/semgrep.sarif $CHANGED || true
-
-            if [ ! -f semgrep.sarif ]; then
-              echo '{"runs":[{"results":[]}]}' > semgrep.sarif
-            fi
+              --output /repo/semgrep.sarif \
+              $CHANGED_FILES || true
           fi
 
       - name: Count Findings and Fail if Present
