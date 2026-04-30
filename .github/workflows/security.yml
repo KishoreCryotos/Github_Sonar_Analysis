@@ -61,7 +61,7 @@ jobs:
 
       - name: Run Semgrep (generate report only)
         run: |
-          CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD | grep -E '\.(java|js|ts|py|go|php)$' || true)
+          CHANGED_FILES=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }} | grep -E '\.(java|js|ts|py|go|php)$' || true)
 
           if [ -z "$CHANGED_FILES" ]; then
             echo '{"runs":[{"results":[]}]}' > semgrep.sarif
@@ -117,7 +117,7 @@ jobs:
 
       - name: Run Semgrep Again for Gate Check
         run: |
-          CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD | grep -E '\.(java|js|ts|py|go|php)$' || true)
+          CHANGED_FILES=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }} | grep -E '\.(java|js|ts|py|go|php)$' || true)
 
           if [ -z "$CHANGED_FILES" ]; then
             echo '{"runs":[{"results":[]}]}' > semgrep.sarif
