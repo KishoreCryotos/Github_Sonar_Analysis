@@ -7,6 +7,7 @@ public class TestVuln {
 
     // One Gitleaks finding only
     String awsKey = "AKIA2026NEWTESTKEY12";
+    String awsKey = "AKIA2026OLDTESTKEY23";
 
     public void run(String input, Connection conn) throws Exception {
 
