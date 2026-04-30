@@ -67,6 +67,11 @@ jobs:
             --sarif \
             --output /repo/semgrep.sarif || true
 
+          # ensure file exists (fix jq error)
+          if [ ! -f semgrep.sarif ]; then
+            echo '{"runs":[{"results":[]}]}' > semgrep.sarif
+          fi
+
       - name: Install jq
         run: |
           sudo apt-get update
@@ -114,6 +119,11 @@ jobs:
             --baseline-commit HEAD~1 \
             --sarif \
             --output /repo/semgrep.sarif || true
+
+          # ensure file exists (fix jq error)
+          if [ ! -f semgrep.sarif ]; then
+            echo '{"runs":[{"results":[]}]}' > semgrep.sarif
+          fi
 
       - name: Count Findings and Fail if Present
         run: |
