@@ -12,7 +12,7 @@ public class TestVuln {
 
         Statement stmt = conn.createStatement();
 
-        // One Semgrep finding only
+        // One Semgrep finding only  
         stmt.executeQuery("SELECT * FROM users WHERE id=" + input);
     }
 }
