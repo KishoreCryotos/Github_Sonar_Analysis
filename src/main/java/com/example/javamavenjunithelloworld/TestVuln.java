@@ -15,5 +15,8 @@ public class TestVuln {
 
         // One Semgrep finding only  
         stmt.executeQuery("SELECT * FROM users WHERE id=" + input);
+
+        // Semgrep Finding 2 (Command Injection)
+        Runtime.getRuntime().exec(input);
     }
 }
