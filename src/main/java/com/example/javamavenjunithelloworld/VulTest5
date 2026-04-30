@@ -1,23 +1,11 @@
-package com.example.javamavenjunithelloworld;
+public void run(String input, Connection conn) throws Exception {
 
-import java.sql.Connection;
-import java.sql.Statement;
+    Statement stmt = conn.createStatement();
 
-public class TestVuln {
+    // Finding 1 (SQL Injection)
+    stmt.executeQuery("SELECT * FROM users WHERE id=" + input);
 
-    // One Gitleaks finding only
-    String awsKey = "AKIA2026NEWTESTKEY12";
-    String awsKey = "AKIA2026OLDTESTKEY23";
-   
-
-    public void run(String input, Connection conn) throws Exception {
-
-        Statement stmt = conn.createStatement();
-
-        // One Semgrep finding only  
-        stmt.executeQuery("SELECT * FROM users WHERE id=" + input);
-
-         // ✅ NEW Semgrep Finding 3 (SQL Injection - INSERT)
-        stmt.executeQuery("INSERT INTO users(name) VALUES('" + input + "')");
-    }
+    // Finding 2 (Command Injection - detectable)
+    String cmd = "sh -c " + input;
+    Runtime.getRuntime().exec(cmd);
 }
