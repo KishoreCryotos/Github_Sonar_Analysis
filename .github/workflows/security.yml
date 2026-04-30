@@ -24,7 +24,6 @@ jobs:
       - name: Run Gitleaks (generate report only)
         run: |
           docker run --rm -v $(pwd):/repo -w /repo zricethezav/gitleaks detect \
-            --config p/owasp-top-ten \
             --source=/repo \
             --log-opts="HEAD~1..HEAD" \
             --report-format sarif \
@@ -68,6 +67,7 @@ jobs:
             echo '{"runs":[{"results":[]}]}' > semgrep.sarif
           else
             docker run --rm -v $(pwd):/repo -w /repo semgrep/semgrep semgrep scan \
+              --config p/owasp-top-ten \
               --config p/java \
               --config p/security-audit \
               --sarif \
