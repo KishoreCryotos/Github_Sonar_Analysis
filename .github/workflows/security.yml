@@ -123,6 +123,7 @@ jobs:
             echo '{"runs":[{"results":[]}]}' > semgrep.sarif
           else
             docker run --rm -v $(pwd):/repo -w /repo semgrep/semgrep semgrep scan \
+              --config p/owasp-top-ten \
               --config p/java \
               --config p/security-audit \
               --sarif \
