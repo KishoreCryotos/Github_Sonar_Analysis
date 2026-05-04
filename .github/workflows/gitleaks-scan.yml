@@ -1,0 +1,92 @@
+name: Gitleaks Scan
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  gitleaks:
+    name: Gitleaks Secret Scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2   # required for HEAD~1
+
+      - name: Run Gitleaks (latest commit only, markdown format)
+        run: |
+          docker run --rm -v $(pwd):/repo -w /repo zricethezav/gitleaks detect \
+            --source=/repo \
+            --log-opts="HEAD~1..HEAD" \
+            --report-format template \
+            --report-template '{{range .}}### 🚨 Secret Detected
+- **File:** {{.File}}
+- **Rule:** {{.RuleID}}
+- **Line:** {{.StartLine}}
+- **Commit:** {{.Commit}}
+- **Author:** {{.Author}}
+
+{{end}}' \
+            --report-path /repo/gitleaks.md \
+            --exit-code 0
+
+      - name: Show Report in PR Summary
+        run: |
+          if [ -s gitleaks.md ]; then
+            cat gitleaks.md >> $GITHUB_STEP_SUMMARY
+          else
+            echo "✅ No secrets detected in latest commit" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Count Findings
+        id: count
+        run: |
+          if [ -s gitleaks.md ]; then
+            COUNT=$(grep -c "🚨 Secret Detected" gitleaks.md || true)
+          else
+            COUNT=0
+          fi
+
+          echo "count=$COUNT" >> $GITHUB_OUTPUT
+          echo "Findings: $COUNT"
+
+      - name: Create Issue (Notify Developer)
+        if: steps.count.outputs.count != '0'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const actor = context.actor;
+
+            github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: "🚨 Gitleaks Alert - Secrets Detected",
+              body:
+                "🚨 **Secrets detected in latest commit**\n\n" +
+                "👤 **Developer:** @" + actor + "\n" +
+                "🔹 **Branch:** " + context.payload.pull_request.head.ref + "\n" +
+                "🔹 **Commit:** " + context.sha + "\n\n" +
+                "## Findings\n\n" +
+                "Check the PR summary (Checks tab) for full details.\n\n" +
+                "## Action Required\n\n" +
+                "1. Remove exposed secrets\n" +
+                "2. Rotate credentials immediately\n" +
+                "3. Push updated commit\n"
+            });
+
+      - name: Fail Check if Findings Exist
+        run: |
+          if [ "${{ steps.count.outputs.count }}" != "0" ]; then
+            exit 1
+          fi
+
+      - name: Success Message
+        if: success()
+        run: echo "No secrets detected in latest commit ✅"
