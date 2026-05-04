@@ -1,7 +1,7 @@
 name: Security Scan
 
 on:
-  push:
+  pull_request:
     branches:
       - main
 
@@ -61,7 +61,7 @@ jobs:
 
       - name: Run Semgrep (generate report only)
         run: |
-          CHANGED_FILES=$(git diff --name-only HEAD^ HEAD | grep -E '\.(java|js|ts|py|go|php)$' || true)
+          CHANGED_FILES=$(git diff --name-only origin/${{ github.base_ref }}...HEAD | grep -E '\.(java|js|ts|py|go|php)$' || true)
 
           echo "Changed files: $CHANGED_FILES"
 
@@ -122,7 +122,7 @@ jobs:
 
       - name: Run Semgrep Again for Gate Check
         run: |
-          CHANGED_FILES=$(git diff --name-only HEAD^ HEAD | grep -E '\.(java|js|ts|py|go|php)$' || true)
+          CHANGED_FILES=$(git diff --name-only origin/${{ github.base_ref }}...HEAD | grep -E '\.(java|js|ts|py|go|php)$' || true)
 
           echo "Changed files: $CHANGED_FILES"
 
