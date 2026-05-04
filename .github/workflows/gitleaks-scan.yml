@@ -4,6 +4,7 @@ on:
   pull_request:
     branches:
       - main
+    types: [opened, synchronize, reopened]
 
 permissions:
   contents: read
@@ -18,22 +19,26 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 2   # required for HEAD~1
+          fetch-depth: 2
 
       - name: Run Gitleaks (latest commit only, markdown format)
         run: |
+          cat << 'EOF' > template.tpl
+          {{range .}}### 🚨 Secret Detected
+          - **File:** {{.File}}
+          - **Rule:** {{.RuleID}}
+          - **Line:** {{.StartLine}}
+          - **Commit:** {{.Commit}}
+          - **Author:** {{.Author}}
+
+          {{end}}
+          EOF
+
           docker run --rm -v $(pwd):/repo -w /repo zricethezav/gitleaks detect \
             --source=/repo \
             --log-opts="HEAD~1..HEAD" \
             --report-format template \
-            --report-template '{{range .}}### 🚨 Secret Detected
-- **File:** {{.File}}
-- **Rule:** {{.RuleID}}
-- **Line:** {{.StartLine}}
-- **Commit:** {{.Commit}}
-- **Author:** {{.Author}}
-
-{{end}}' \
+            --report-template /repo/template.tpl \
             --report-path /repo/gitleaks.md \
             --exit-code 0
 
