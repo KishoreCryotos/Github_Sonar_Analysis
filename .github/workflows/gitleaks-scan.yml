@@ -1,14 +1,16 @@
 name: Gitleaks Scan
 
+# 🔹 Trigger: Run only for PRs targeting main
 on:
   pull_request:
     branches:
       - main
     types: [opened, synchronize, reopened]
 
+# 🔹 Permissions required
 permissions:
-  contents: read
-  issues: write
+  contents: read     # read repo code
+  issues: write      # create issue if secrets found
 
 jobs:
   gitleaks:
@@ -16,13 +18,17 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # 🔹 Step 1: Checkout full repo history
+      # REQUIRED: so we can compare base SHA → head SHA (PR commits)
       - name: Checkout Code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 2
+          fetch-depth: 0
 
-      - name: Run Gitleaks (latest commit only, markdown format)
+      # 🔹 Step 2: Run Gitleaks ONLY on PR commits
+      - name: Run Gitleaks (scan PR commits only)
         run: |
+          # Create custom markdown template for clean output
           cat << 'EOF' > template.tpl
           {{range .}}### 🚨 Secret Detected
           - **File:** {{.File}}
@@ -34,22 +40,30 @@ jobs:
           {{end}}
           EOF
 
+          echo "Scanning ONLY PR commits..."
+
+          # 🔥 IMPORTANT:
+          # This scans ONLY commits introduced in the PR
+          # base.sha = target branch commit
+          # head.sha = PR latest commit
           docker run --rm -v $(pwd):/repo -w /repo zricethezav/gitleaks detect \
             --source=/repo \
-            --log-opts="HEAD~1..HEAD" \
+            --log-opts="${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}" \
             --report-format template \
             --report-template /repo/template.tpl \
             --report-path /repo/gitleaks.md \
             --exit-code 0
 
+      # 🔹 Step 3: Show report in PR "Checks" UI
       - name: Show Report in PR Summary
         run: |
           if [ -s gitleaks.md ]; then
             cat gitleaks.md >> $GITHUB_STEP_SUMMARY
           else
-            echo "✅ No secrets detected in latest commit" >> $GITHUB_STEP_SUMMARY
+            echo "✅ No secrets detected in PR commits" >> $GITHUB_STEP_SUMMARY
           fi
 
+      # 🔹 Step 4: Count findings (used for fail + issue creation)
       - name: Count Findings
         id: count
         run: |
@@ -62,6 +76,7 @@ jobs:
           echo "count=$COUNT" >> $GITHUB_OUTPUT
           echo "Findings: $COUNT"
 
+      # 🔹 Step 5: Create GitHub Issue if secrets found
       - name: Create Issue (Notify Developer)
         if: steps.count.outputs.count != '0'
         uses: actions/github-script@v7
@@ -74,10 +89,11 @@ jobs:
               repo: context.repo.repo,
               title: "🚨 Gitleaks Alert - Secrets Detected",
               body:
-                "🚨 **Secrets detected in latest commit**\n\n" +
+                "🚨 **Secrets detected in PR commits**\n\n" +
                 "👤 **Developer:** @" + actor + "\n" +
                 "🔹 **Branch:** " + context.payload.pull_request.head.ref + "\n" +
-                "🔹 **Commit:** " + context.sha + "\n\n" +
+                "🔹 **Base:** " + context.payload.pull_request.base.ref + "\n" +
+                "🔹 **Commit Range:** " + context.payload.pull_request.base.sha.substring(0,7) + " → " + context.payload.pull_request.head.sha.substring(0,7) + "\n\n" +
                 "## Findings\n\n" +
                 "Check the PR summary (Checks tab) for full details.\n\n" +
                 "## Action Required\n\n" +
@@ -86,12 +102,15 @@ jobs:
                 "3. Push updated commit\n"
             });
 
+      # 🔹 Step 6: Fail the check if findings exist
+      # This makes it visible as ❌ in PR checks
       - name: Fail Check if Findings Exist
         run: |
           if [ "${{ steps.count.outputs.count }}" != "0" ]; then
             exit 1
           fi
 
+      # 🔹 Step 7: Success message
       - name: Success Message
         if: success()
-        run: echo "No secrets detected in latest commit ✅"
+        run: echo "No secrets detected in PR commits ✅"
