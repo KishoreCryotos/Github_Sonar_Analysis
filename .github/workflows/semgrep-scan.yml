@@ -19,36 +19,44 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 0   # required for baseline comparison
 
-      # 🔹 Install Semgrep
-      - name: Install Semgrep
+      # 🔹 Install Semgrep + jq
+      - name: Install Dependencies
         run: |
           pip install semgrep
+          sudo apt-get update && sudo apt-get install -y jq
 
-      # 🔹 Run Semgrep (Markdown + SARIF)
-      - name: Run Semgrep (Markdown + SARIF)
+      # 🔹 Run Semgrep (JSON + SARIF with proper rules + baseline)
+      - name: Run Semgrep Scan
         run: |
-          # Markdown report
+          # JSON report (for summary + counting)
           semgrep scan \
-            --config=auto \
+            --config=p/security-audit \
+            --baseline-ref=${{ github.event.pull_request.base.sha }} \
             --json > semgrep.json
 
-          # Convert JSON → Markdown (simple format)
-          echo "## 🚨 Semgrep Findings" > semgrep.md
-          jq -r '
-            .results[] |
-            "### 🚨 Issue Detected\n" +
-            "- **File:** \(.path)\n" +
-            "- **Rule:** \(.check_id)\n" +
-            "- **Line:** \(.start.line)\n" +
-            "- **Severity:** \(.extra.severity)\n"
-          ' semgrep.json >> semgrep.md || true
-
-          # SARIF report
+          # SARIF report (for PR annotations + Security tab)
           semgrep scan \
-            --config=auto \
+            --config=p/security-audit \
+            --baseline-ref=${{ github.event.pull_request.base.sha }} \
             --sarif > semgrep.sarif
+
+      # 🔹 Convert JSON → Markdown (for Checks tab)
+      - name: Generate Markdown Report
+        run: |
+          echo "## 🚨 Semgrep Findings" > semgrep.md
+
+          if [ -s semgrep.json ]; then
+            jq -r '
+              .results[] |
+              "### 🚨 Issue Detected\n" +
+              "- **File:** \(.path)\n" +
+              "- **Rule:** \(.check_id)\n" +
+              "- **Line:** \(.start.line)\n" +
+              "- **Severity:** \(.extra.severity)\n"
+            ' semgrep.json >> semgrep.md || true
+          fi
 
       # 🔹 Upload SARIF → PR annotations + Security tab alerts
       - name: Upload Semgrep SARIF
@@ -76,7 +84,7 @@ jobs:
           fi
           echo "count=$COUNT" >> $GITHUB_OUTPUT
 
-      # 🔹 Fail check → triggers PR notification + can block merge
+      # 🔹 Fail check → triggers PR notification + blocks merge
       - name: Fail Check if Findings Exist
         run: |
           if [ "${{ steps.count.outputs.count }}" != "0" ]; then
