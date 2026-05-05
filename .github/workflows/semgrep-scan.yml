@@ -1,0 +1,89 @@
+name: Semgrep Scan
+
+on:
+  pull_request:
+    branches:
+      - main
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  security-events: write   # required for SARIF upload
+
+jobs:
+  semgrep:
+    name: Semgrep Security Scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # 🔹 Install Semgrep
+      - name: Install Semgrep
+        run: |
+          pip install semgrep
+
+      # 🔹 Run Semgrep (Markdown + SARIF)
+      - name: Run Semgrep (Markdown + SARIF)
+        run: |
+          # Markdown report
+          semgrep scan \
+            --config=auto \
+            --json > semgrep.json
+
+          # Convert JSON → Markdown (simple format)
+          echo "## 🚨 Semgrep Findings" > semgrep.md
+          jq -r '
+            .results[] |
+            "### 🚨 Issue Detected\n" +
+            "- **File:** \(.path)\n" +
+            "- **Rule:** \(.check_id)\n" +
+            "- **Line:** \(.start.line)\n" +
+            "- **Severity:** \(.extra.severity)\n"
+          ' semgrep.json >> semgrep.md || true
+
+          # SARIF report
+          semgrep scan \
+            --config=auto \
+            --sarif > semgrep.sarif
+
+      # 🔹 Upload SARIF → PR annotations + Security tab alerts
+      - name: Upload Semgrep SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: semgrep.sarif
+
+      # 🔹 Show report in Checks tab
+      - name: Show Report in PR Summary
+        run: |
+          if [ -s semgrep.md ]; then
+            cat semgrep.md >> $GITHUB_STEP_SUMMARY
+          else
+            echo "✅ No Semgrep findings in PR commits" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      # 🔹 Count findings
+      - name: Count Findings
+        id: count
+        run: |
+          if [ -s semgrep.json ]; then
+            COUNT=$(jq '.results | length' semgrep.json)
+          else
+            COUNT=0
+          fi
+          echo "count=$COUNT" >> $GITHUB_OUTPUT
+
+      # 🔹 Fail check → triggers PR notification + can block merge
+      - name: Fail Check if Findings Exist
+        run: |
+          if [ "${{ steps.count.outputs.count }}" != "0" ]; then
+            echo "❌ Semgrep findings detected! Failing the build."
+            exit 1
+          fi
+
+      - name: Success Message
+        if: success()
+        run: echo "No Semgrep findings in PR commits ✅"
