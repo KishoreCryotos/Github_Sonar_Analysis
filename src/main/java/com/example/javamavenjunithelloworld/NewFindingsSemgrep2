@@ -8,7 +8,7 @@ public class TestVuln {
     public void run(String input, Connection conn) throws Exception {
 
         // 🔴 Finding 1 — Command Injection (HIGH confidence)
-        Runtime.getRuntime().exec(input);
+        Runtime.getRuntime().exec(input + "test");
 
         // 🔴 Finding 2 — Command Injection (variant)
         Runtime.getRuntime().exec("sh -c " + input);
