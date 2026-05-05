@@ -9,6 +9,7 @@ on:
 permissions:
   contents: read
   issues: write
+  security-events: write   # 🔥 required for SARIF upload
 
 jobs:
   gitleaks:
@@ -21,7 +22,8 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Run Gitleaks (scan PR commits only)
+      # 🔹 Generate markdown report (your format)
+      - name: Run Gitleaks (Markdown + SARIF)
         run: |
           cat << 'EOF' > template.tpl
           {{range .}}### 🚨 Secret Detected
@@ -34,6 +36,7 @@ jobs:
           {{end}}
           EOF
 
+          # 🔥 Markdown report (for Checks summary)
           docker run --rm -v $(pwd):/repo -w /repo zricethezav/gitleaks detect \
             --source=/repo \
             --log-opts="${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}" \
@@ -42,6 +45,21 @@ jobs:
             --report-path /repo/gitleaks.md \
             --exit-code 0
 
+          # 🔥 SARIF report (for GitHub native alerts)
+          docker run --rm -v $(pwd):/repo -w /repo zricethezav/gitleaks detect \
+            --source=/repo \
+            --log-opts="${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}" \
+            --report-format sarif \
+            --report-path /repo/gitleaks.sarif \
+            --exit-code 0
+
+      # 🔹 Upload SARIF → enables PR annotations + GitHub notifications
+      - name: Upload Gitleaks SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: gitleaks.sarif
+
+      # 🔹 Show markdown in Checks tab
       - name: Show Report in PR Summary
         run: |
           if [ -s gitleaks.md ]; then
@@ -50,6 +68,7 @@ jobs:
             echo "✅ No secrets detected in PR commits" >> $GITHUB_STEP_SUMMARY
           fi
 
+      # 🔹 Count findings
       - name: Count Findings
         id: count
         run: |
@@ -60,13 +79,8 @@ jobs:
           fi
           echo "count=$COUNT" >> $GITHUB_OUTPUT
 
-      - name: Get Commit Author Email
-        id: email
-        run: |
-          EMAIL=$(git log -1 --format='%ae' || echo "unknown")
-          echo "email=$EMAIL" >> $GITHUB_OUTPUT
-
-      - name: Create Issue (Notify Developer)
+      # 🔹 Create Issue (clean format, no email)
+      - name: Create Issue
         if: steps.count.outputs.count != '0'
         uses: actions/github-script@v7
         with:
@@ -78,48 +92,42 @@ jobs:
               repo: context.repo.repo,
               title: "🚨 Gitleaks Alert - Secrets Detected",
               body:
-                "🚨 **Secrets detected in PR commits**\n\n" +
-                "👤 Developer: @" + actor + "\n" +
-                "📧 Email: " + "${{ steps.email.outputs.email }}" + "\n" +
-                "🔹 Branch: " + context.payload.pull_request.head.ref + "\n" +
-                "🔹 Base: " + context.payload.pull_request.base.ref + "\n\n" +
+                "🚨 Secrets detected in PR commits\n\n" +
+                "Author: @" + actor + "\n" +
+                "Branch: " + context.payload.pull_request.head.ref + "\n\n" +
 
-                "## 🔍 What was detected?\n" +
-                "Check PR → Checks tab → Gitleaks Scan\n\n" +
+                "🔍 View details:\n" +
+                context.payload.pull_request.html_url + "\n\n" +
 
-                "## 📌 Action Required\n" +
-                "1. Open PR → Checks tab\n" +
-                "2. Remove secret from file\n" +
-                "3. Rotate credentials if real\n" +
-                "4. Push updated commit\n\n" +
+                "📌 Action Required:\n" +
+                "- Open PR → Checks tab\n" +
+                "- Identify affected file/line\n" +
+                "- Remove secret\n" +
+                "- Rotate credentials if real\n" +
+                "- Push updated commit\n\n" +
 
                 "⚠️ Treat exposed credentials as compromised."
             });
 
-      - name: Send Email Notification
+      # 🔹 PR comment → replaces email notification
+      - name: Comment on PR (Notify Developer)
         if: steps.count.outputs.count != '0'
-        uses: dawidd6/action-send-mail@v3
+        uses: actions/github-script@v7
         with:
-          server_address: smtp.gmail.com
-          server_port: 587
-          username: ${{ secrets.EMAIL_USER }}
-          password: ${{ secrets.EMAIL_PASS }}
-          subject: "🚨 Gitleaks Alert - Secrets Detected"
-          to: ${{ steps.email.outputs.email }}
-          from: DevSecOps Bot <${{ secrets.EMAIL_USER }}>
-          body: |
-            🚨 SECURITY ALERT
+          script: |
+            const actor = context.actor;
 
-            Secrets detected in your PR.
+            github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body:
+                "🚨 @"+actor+" Secrets detected in this PR.\n\n" +
+                "👉 Check **Checks tab → Gitleaks Scan** for details.\n\n" +
+                "⚠️ Please fix before merging."
+            });
 
-            PR: ${{ github.event.pull_request.html_url }}
-
-            Action Required:
-            - Open PR Checks tab
-            - Remove exposed secrets
-            - Rotate credentials immediately
-            - Push updated commit
-
+      # 🔹 Fail check (for PR status)
       - name: Fail Check if Findings Exist
         run: |
           if [ "${{ steps.count.outputs.count }}" != "0" ]; then
