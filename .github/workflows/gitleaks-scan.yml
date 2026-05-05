@@ -8,8 +8,7 @@ on:
 
 permissions:
   contents: read
-  issues: write
-  security-events: write   # 🔥 required for SARIF upload
+  security-events: write   # required for SARIF upload
 
 jobs:
   gitleaks:
@@ -22,7 +21,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      # 🔹 Generate markdown report (your format)
+      # 🔹 Generate markdown + SARIF reports
       - name: Run Gitleaks (Markdown + SARIF)
         run: |
           cat << 'EOF' > template.tpl
@@ -36,7 +35,7 @@ jobs:
           {{end}}
           EOF
 
-          # 🔥 Markdown report (for Checks summary)
+          # Markdown report (for Checks summary)
           docker run --rm -v $(pwd):/repo -w /repo zricethezav/gitleaks detect \
             --source=/repo \
             --log-opts="${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}" \
@@ -45,7 +44,7 @@ jobs:
             --report-path /repo/gitleaks.md \
             --exit-code 0
 
-          # 🔥 SARIF report (for GitHub native alerts)
+          # SARIF report (for GitHub code scanning alerts)
           docker run --rm -v $(pwd):/repo -w /repo zricethezav/gitleaks detect \
             --source=/repo \
             --log-opts="${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}" \
@@ -53,13 +52,13 @@ jobs:
             --report-path /repo/gitleaks.sarif \
             --exit-code 0
 
-      # 🔹 Upload SARIF → enables PR annotations + GitHub notifications
+      # 🔹 Upload SARIF → enables PR annotations + Security tab alerts
       - name: Upload Gitleaks SARIF
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: gitleaks.sarif
 
-      # 🔹 Show markdown in Checks tab
+      # 🔹 Show report in Checks tab
       - name: Show Report in PR Summary
         run: |
           if [ -s gitleaks.md ]; then
@@ -79,58 +78,11 @@ jobs:
           fi
           echo "count=$COUNT" >> $GITHUB_OUTPUT
 
-      # 🔹 Create Issue (clean format, no email)
-      - name: Create Issue
-        if: steps.count.outputs.count != '0'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const actor = context.actor;
-
-            github.rest.issues.create({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              title: "🚨 Gitleaks Alert - Secrets Detected",
-              body:
-                "🚨 Secrets detected in PR commits\n\n" +
-                "Author: @" + actor + "\n" +
-                "Branch: " + context.payload.pull_request.head.ref + "\n\n" +
-
-                "🔍 View details:\n" +
-                context.payload.pull_request.html_url + "\n\n" +
-
-                "📌 Action Required:\n" +
-                "- Open PR → Checks tab\n" +
-                "- Identify affected file/line\n" +
-                "- Remove secret\n" +
-                "- Rotate credentials if real\n" +
-                "- Push updated commit\n\n" +
-
-                "⚠️ Treat exposed credentials as compromised."
-            });
-
-      # 🔹 PR comment → replaces email notification
-      - name: Comment on PR (Notify Developer)
-        if: steps.count.outputs.count != '0'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const actor = context.actor;
-
-            github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body:
-                "🚨 @"+actor+" Secrets detected in this PR.\n\n" +
-                "👉 Check **Checks tab → Gitleaks Scan** for details.\n\n" +
-                "⚠️ Please fix before merging."
-            });
-
-      # 🔹 Fail check (for PR status)
+      # 🔹 Fail check → triggers PR notification + can block merge
       - name: Fail Check if Findings Exist
         run: |
           if [ "${{ steps.count.outputs.count }}" != "0" ]; then
+            echo "❌ Secrets detected! Failing the build."
             exit 1
           fi
 
