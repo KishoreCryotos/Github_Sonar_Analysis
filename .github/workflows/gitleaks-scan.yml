@@ -17,7 +17,6 @@ jobs:
 
     steps:
       # 🔹 Checkout full git history
-      # Required for PR commit comparison
       - name: Checkout Code
         uses: actions/checkout@v4
         with:
@@ -26,19 +25,16 @@ jobs:
       # 🔹 Run Gitleaks only on PR commits
       - name: Run Gitleaks (PR commits only)
         run: |
-          # Create markdown template
-          cat > template.tpl <<'EOF'
-          {{range .}}### 🚨 Secret Detected
-          - **File:** {{.File}}
-          - **Rule:** {{.RuleID}}
-          - **Line:** {{.StartLine}}
-          - **Commit:** {{.Commit}}
-          - **Author:** {{.Author}}
+          printf '%s\n' \
+          '{{range .}}### 🚨 Secret Detected' \
+          '- **File:** {{.File}}' \
+          '- **Rule:** {{.RuleID}}' \
+          '- **Line:** {{.StartLine}}' \
+          '- **Commit:** {{.Commit}}' \
+          '- **Author:** {{.Author}}' \
+          '' \
+          '{{end}}' > template.tpl
 
-          {{end}}
-          EOF
-
-          # Scan ONLY commits introduced in this PR
           docker run --rm -v $(pwd):/repo -w /repo zricethezav/gitleaks detect \
             --source=/repo \
             --log-opts="${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}" \
@@ -69,7 +65,6 @@ jobs:
           echo "count=$COUNT" >> $GITHUB_OUTPUT
 
       # 🔹 Fail workflow if secrets detected
-      # This creates failed PR check status
       - name: Fail Check if Findings Exist
         run: |
           if [ "${{ steps.count.outputs.count }}" != "0" ]; then
