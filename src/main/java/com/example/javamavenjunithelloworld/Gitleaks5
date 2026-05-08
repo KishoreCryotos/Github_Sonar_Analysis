@@ -1,0 +1,13 @@
+package com.example.javamavenjunithelloworld;
+import java.sql.Connection;
+import java.sql.Statement;
+public class TestVuln {
+    // One Gitleaks finding only
+    String awsKey = "AKIA2026NEWTESTKEY12";
+
+    public void run(String input, Connection conn) throws Exception {
+        Statement stmt = conn.createStatement();
+        // One Semgrep finding only
+        stmt.executeQuery("SELECT * FROM users WHERE id=" + input);
+    }
+}
