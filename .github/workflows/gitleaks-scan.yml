@@ -1,29 +1,32 @@
 name: Gitleaks Scan
-
+ 
 on:
   pull_request:
     branches:
-      - main
+      - master
+      - develop
     types: [opened, synchronize, reopened]
-
+ 
 permissions:
   contents: read
-  security-events: write   # required for SARIF upload
-
+ 
 jobs:
   gitleaks:
     name: Gitleaks Secret Scan
     runs-on: ubuntu-latest
-
+ 
     steps:
+      # 🔹 Checkout full git history
+      # Required for PR commit comparison
       - name: Checkout Code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
-      # 🔹 Generate markdown + SARIF reports
-      - name: Run Gitleaks (Markdown + SARIF)
+ 
+      # 🔹 Run Gitleaks only on PR commits
+      - name: Run Gitleaks (PR commits only)
         run: |
+          # Create markdown template
           cat << 'EOF' > template.tpl
           {{range .}}### 🚨 Secret Detected
           - **File:** {{.File}}
@@ -31,11 +34,11 @@ jobs:
           - **Line:** {{.StartLine}}
           - **Commit:** {{.Commit}}
           - **Author:** {{.Author}}
-
+ 
           {{end}}
           EOF
-
-          # Markdown report (for Checks summary)
+ 
+          # Scan ONLY commits introduced in this PR
           docker run --rm -v $(pwd):/repo -w /repo zricethezav/gitleaks detect \
             --source=/repo \
             --log-opts="${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}" \
@@ -43,22 +46,8 @@ jobs:
             --report-template /repo/template.tpl \
             --report-path /repo/gitleaks.md \
             --exit-code 0
-
-          # SARIF report (for GitHub code scanning alerts)
-          docker run --rm -v $(pwd):/repo -w /repo zricethezav/gitleaks detect \
-            --source=/repo \
-            --log-opts="${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}" \
-            --report-format sarif \
-            --report-path /repo/gitleaks.sarif \
-            --exit-code 0
-
-      # 🔹 Upload SARIF → enables PR annotations + Security tab alerts
-      - name: Upload Gitleaks SARIF
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: gitleaks.sarif
-
-      # 🔹 Show report in Checks tab
+ 
+      # 🔹 Publish findings into GitHub Checks tab
       - name: Show Report in PR Summary
         run: |
           if [ -s gitleaks.md ]; then
@@ -66,7 +55,7 @@ jobs:
           else
             echo "✅ No secrets detected in PR commits" >> $GITHUB_STEP_SUMMARY
           fi
-
+ 
       # 🔹 Count findings
       - name: Count Findings
         id: count
@@ -76,16 +65,20 @@ jobs:
           else
             COUNT=0
           fi
+ 
           echo "count=$COUNT" >> $GITHUB_OUTPUT
-
-      # 🔹 Fail check → triggers PR notification + can block merge
+ 
+      # 🔹 Fail workflow if secrets detected
+      # This creates failed PR check status
       - name: Fail Check if Findings Exist
         run: |
           if [ "${{ steps.count.outputs.count }}" != "0" ]; then
             echo "❌ Secrets detected! Failing the build."
             exit 1
           fi
-
+ 
+      # 🔹 Success message
       - name: Success Message
         if: success()
-        run: echo "No secrets detected in PR commits ✅"
+        run: echo "✅ No secrets detected in PR commits"
+ 
