@@ -16,11 +16,11 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
       - name: Run Gitleaks (PR commits only)
         run: |
           cat > template.tpl <<EOF
-          {{range .}}### 🚨 Secret Detected
+          {{range .}}---
+          🚨 **Secret Detected**
           - **File:** {{.File}}
           - **Rule:** {{.RuleID}}
           - **Line:** {{.StartLine}}
@@ -35,7 +35,6 @@ jobs:
             --report-template /repo/template.tpl \
             --report-path /repo/gitleaks.md \
             --exit-code 0
-
       - name: Show Report in PR Summary
         run: |
           if [ -s gitleaks.md ]; then
@@ -43,7 +42,6 @@ jobs:
           else
             echo "✅ No secrets detected in PR commits" >> $GITHUB_STEP_SUMMARY
           fi
-
       - name: Count Findings
         id: count
         run: |
@@ -53,7 +51,6 @@ jobs:
             COUNT=0
           fi
           echo "count=$COUNT" >> $GITHUB_OUTPUT
-
       - name: Notify Developer via Issue
         if: steps.count.outputs.count != '0'
         run: |
@@ -67,30 +64,25 @@ jobs:
           BODY="$BODY\n$(cat gitleaks.md)"
           BODY="$BODY\n\n**Check your workflow run here:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           BODY="$BODY\n\n⚠️ **@${{ github.actor }} please fix the above secrets immediately!**"
-
           cat > issue_payload.json << EOF
           {
             "title": "$TITLE",
             "body": "$BODY"
           }
           EOF
-
           curl -X POST \
             -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             -H "Accept: application/vnd.github.v3+json" \
             -H "Content-Type: application/json" \
             -d @issue_payload.json \
             https://api.github.com/repos/${{ github.repository }}/issues
-
           rm issue_payload.json
-
       - name: Fail Check if Findings Exist
         run: |
           if [ "${{ steps.count.outputs.count }}" != "0" ]; then
             echo "❌ Secrets detected! Failing the build."
             exit 1
           fi
-
       - name: Success Message
         if: success()
         run: echo "✅ No secrets detected in PR commits"
