@@ -46,7 +46,7 @@ jobs:
         id: count
         run: |
           if [ -s gitleaks.md ]; then
-            COUNT=$(grep -c "🚨 Secret Detected" gitleaks.md || true)
+            COUNT=$(grep -c "🚨" gitleaks.md || true)
           else
             COUNT=0
           fi
