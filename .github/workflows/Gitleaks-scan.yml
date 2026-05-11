@@ -19,8 +19,7 @@ jobs:
       - name: Run Gitleaks (PR commits only)
         run: |
           cat > template.tpl <<EOF
-          {{range .}}---
-          🚨 **Secret Detected**
+          {{range .}}### 🚨 Secret Detected
           - **File:** {{.File}}
           - **Rule:** {{.RuleID}}
           - **Line:** {{.StartLine}}
@@ -46,7 +45,7 @@ jobs:
         id: count
         run: |
           if [ -s gitleaks.md ]; then
-            COUNT=$(grep -c "🚨" gitleaks.md || true)
+            COUNT=$(grep -c "🚨 Secret Detected" gitleaks.md || true)
           else
             COUNT=0
           fi
