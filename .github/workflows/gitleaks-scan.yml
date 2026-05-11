@@ -1,92 +1,88 @@
 name: Gitleaks Scan
-
 on:
   pull_request:
     branches:
       - main
-
+    types: [opened, synchronize, reopened]
 permissions:
   contents: read
   issues: write
-
 jobs:
   gitleaks:
     name: Gitleaks Secret Scan
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 2   # required for HEAD~1
-
-      - name: Run Gitleaks (latest commit only, markdown format)
+          fetch-depth: 0
+      - name: Run Gitleaks (PR commits only)
         run: |
+          cat > template.tpl <<EOF
+          {{range .}}---
+          🚨 **Secret Detected**
+          - **File:** {{.File}}
+          - **Rule:** {{.RuleID}}
+          - **Line:** {{.StartLine}}
+          - **Commit:** {{.Commit}}
+          - **Author:** {{.Author}}
+          {{end}}
+          EOF
           docker run --rm -v $(pwd):/repo -w /repo zricethezav/gitleaks detect \
             --source=/repo \
-            --log-opts="HEAD~1..HEAD" \
+            --log-opts="${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}" \
             --report-format template \
-            --report-template '{{range .}}### 🚨 Secret Detected
-- **File:** {{.File}}
-- **Rule:** {{.RuleID}}
-- **Line:** {{.StartLine}}
-- **Commit:** {{.Commit}}
-- **Author:** {{.Author}}
-
-{{end}}' \
+            --report-template /repo/template.tpl \
             --report-path /repo/gitleaks.md \
             --exit-code 0
-
       - name: Show Report in PR Summary
         run: |
           if [ -s gitleaks.md ]; then
             cat gitleaks.md >> $GITHUB_STEP_SUMMARY
           else
-            echo "✅ No secrets detected in latest commit" >> $GITHUB_STEP_SUMMARY
+            echo "✅ No secrets detected in PR commits" >> $GITHUB_STEP_SUMMARY
           fi
-
       - name: Count Findings
         id: count
         run: |
           if [ -s gitleaks.md ]; then
-            COUNT=$(grep -c "🚨 Secret Detected" gitleaks.md || true)
+            COUNT=$(grep -c "🚨" gitleaks.md || true)
           else
             COUNT=0
           fi
-
           echo "count=$COUNT" >> $GITHUB_OUTPUT
-          echo "Findings: $COUNT"
-
-      - name: Create Issue (Notify Developer)
+      - name: Notify Developer via Issue
         if: steps.count.outputs.count != '0'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const actor = context.actor;
-
-            github.rest.issues.create({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              title: "🚨 Gitleaks Alert - Secrets Detected",
-              body:
-                "🚨 **Secrets detected in latest commit**\n\n" +
-                "👤 **Developer:** @" + actor + "\n" +
-                "🔹 **Branch:** " + context.payload.pull_request.head.ref + "\n" +
-                "🔹 **Commit:** " + context.sha + "\n\n" +
-                "## Findings\n\n" +
-                "Check the PR summary (Checks tab) for full details.\n\n" +
-                "## Action Required\n\n" +
-                "1. Remove exposed secrets\n" +
-                "2. Rotate credentials immediately\n" +
-                "3. Push updated commit\n"
-            });
-
+        run: |
+          TITLE="🚨 Gitleaks Secret Detected in PR #${{ github.event.pull_request.number }} by @${{ github.actor }}"
+          BODY="**PR:** #${{ github.event.pull_request.number }}"
+          BODY="$BODY\n**Developer:** @${{ github.actor }}"
+          BODY="$BODY\n**Branch:** ${{ github.head_ref }}"
+          BODY="$BODY\n**Commit:** ${{ github.event.pull_request.head.sha }}"
+          BODY="$BODY\n\n⚠️ Secrets were detected in your PR commits. Please remove them before this PR can be merged."
+          BODY="$BODY\n\n**Findings:**"
+          BODY="$BODY\n$(cat gitleaks.md)"
+          BODY="$BODY\n\n**Check your workflow run here:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          BODY="$BODY\n\n⚠️ **@${{ github.actor }} please fix the above secrets immediately!**"
+          cat > issue_payload.json << EOF
+          {
+            "title": "$TITLE",
+            "body": "$BODY"
+          }
+          EOF
+          curl -X POST \
+            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            -H "Content-Type: application/json" \
+            -d @issue_payload.json \
+            https://api.github.com/repos/${{ github.repository }}/issues
+          rm issue_payload.json
       - name: Fail Check if Findings Exist
         run: |
           if [ "${{ steps.count.outputs.count }}" != "0" ]; then
+            echo "❌ Secrets detected! Failing the build."
             exit 1
           fi
-
       - name: Success Message
         if: success()
-        run: echo "No secrets detected in latest commit ✅"
+        run: echo "✅ No secrets detected in PR commits"
