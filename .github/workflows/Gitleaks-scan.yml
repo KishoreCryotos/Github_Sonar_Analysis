@@ -19,12 +19,16 @@ jobs:
       - name: Run Gitleaks (PR commits only)
         run: |
           cat > template.tpl <<EOF
-          {{range .}}**🚨 Secret Detected**
+          {{range .}}
+
+          **🚨 Secret Detected**
+
           - **File:** {{.File}}
           - **Rule:** {{.RuleID}}
           - **Line:** {{.StartLine}}
           - **Commit:** {{.Commit}}
           - **Author:** {{.Author}}
+
           {{end}}
           EOF
           docker run --rm -v $(pwd):/repo -w /repo zricethezav/gitleaks detect \
